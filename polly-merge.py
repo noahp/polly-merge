@@ -81,11 +81,8 @@ def get_paged_api(full_url, headers, params=None):
     while not page_data["isLastPage"]:
         params.update({"start": start})
 
-        print(full_url)
         single_page_ok, single_page_data, _ = get_url(
-            full_url,
-            headers=headers,
-            params=params,
+            full_url, headers=headers, params=params,
         )
         assert single_page_ok, "error fetching list"
 
@@ -114,7 +111,8 @@ def get_open_prs(base_url, auth_header):
         params={"state": "open", "role": "author"},
     )
 
-def recurse_comments(comment, comment_texts=[]):
+
+def recurse_comments(comments, comments_text=[]):
     """
     recurse nested comments. the activities api returns stuff like:
 
@@ -130,8 +128,10 @@ def recurse_comments(comment, comment_texts=[]):
 
     etc. so recurse through it
     """
+    for comment in comments:
+        comments_text.append(comment["text"])
+        recurse_comments(comment["comments"], comments_text)
 
-    return comment_texts
 
 def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequestid):
     """get comments for a pr"""
@@ -145,8 +145,18 @@ def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequ
         headers=auth_header,
     )
 
-    comments = []
+    comments_text = []
+    for activity in activities:
+        if activity["action"] == "COMMENTED":
+            comment = activity["comment"]
 
+            # for now, just add the raw text from each comment
+            comments_text.append(comment["text"])
+
+            # recurse through nested comments
+            recurse_comments(comment["comments"], comments_text)
+
+    return comments_text
 
 
 def main():
@@ -158,32 +168,36 @@ def main():
 
     log_file = os.environ.get("POLLY_MERGE_LOG_FILE", "~/polly-merge.log")
 
+    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly-merge merge")
+
     auth_header = {"Authorization": "Bearer " + api_token}
 
     # 1. get all open pull requests
     # pr_list = get_open_prs(bitbucket_url, auth_header)
+    # print(json.dumps(pr_list))
 
     # DEBUG
-    with open("prs.json", "r") as pr_json:
+    with open("prs2.json", "r") as pr_json:
         pr_list = json.load(pr_json)
 
     # 2. for each open pull request, look for the key comment
     for pr in pr_list:
         repo_slug = pr["toRef"]["repository"]["slug"]
         project_id = pr["toRef"]["repository"]["project"]["key"]
-        # print(pr["links"]["self"][0]["href"])
-        print(json.dumps(pr))
+        pr_url = pr["links"]["self"][0]["href"]
+        # print(json.dumps(pr))
 
-        # print(
-        #     get_all_comments(
-        #         bitbucket_url,
-        #         auth_header,
-        #         pr["toRef"]["repository"]["project"]["key"],
-        #         pr["toRef"]["repository"]["slug"],
-        #         pr["id"],
-        #     )
-        # )
-        break
+        all_comments = get_all_comments(
+            bitbucket_url,
+            auth_header,
+            pr["toRef"]["repository"]["project"]["key"],
+            pr["toRef"]["repository"]["slug"],
+            pr["id"],
+        )
+
+        # look for exact match in any comment
+        if merge_trigger in all_comments:
+            print(f"Merging {pr_url} !")
 
     # 3. attempt the merge; this can fail if the merge checks are not done (eg
     #    successful build, sufficient approvals, etc)
