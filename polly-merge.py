@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 
 
-def http_operation(url, verb, headers={}, params={}):
+def http_operation(url, verb, headers=None, params=None):
     """
     execute the HTTP verb. return tuple of:
     ( <bool success?>, <response data>, <response headers> )
@@ -46,25 +46,25 @@ def http_operation(url, verb, headers={}, params={}):
     total_headers.update(headers)
 
     # TODO we should be able to pass params as second field but doesn't work :(
-    req = urllib.request.Request(url + "?" + params, None, total_headers, method=verb)
+    req = urllib.request.Request(f"{url}?{params}", None, total_headers, method=verb)
 
     try:
         with urllib.request.urlopen(req) as response:
             the_page = response.read()
-    except urllib.error.HTTPError as e:
-        print(e)
+    except urllib.error.HTTPError as exception:
+        print(exception)
         return (False, None, None)
 
     # TODO pass response code? + headers
     return (True, the_page, None)
 
 
-def post_url(url, headers={}, params={}):
+def post_url(url, headers=None, params=None):
     """Simple POST"""
     return http_operation(url, "POST", headers, params)
 
 
-def get_url(url, headers={}, params={}):
+def get_url(url, headers=None, params=None):
     """Simple GET"""
     return http_operation(url, "GET", headers, params)
 
@@ -87,7 +87,7 @@ def main():
     start = 0
     while not pr_list["isLastPage"]:
         pr_list_ok, pr_list_data, _ = get_url(
-            bitbucket_url + "/rest/api/1.0/dashboard/pull-requests",
+            f"{bitbucket_url}/rest/api/1.0/dashboard/pull-requests",
             headers=auth_header,
             params={"state": "open", "role": "author", "start": start},
         )
