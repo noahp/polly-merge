@@ -29,6 +29,32 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from multiprocessing.dummy import Pool
+
+try:
+    from halo import Halo
+except ImportError:
+
+    class Halo(object):
+        """Dummy class if the user doesn't have halo installed"""
+
+        def __init__(self, text=None, *args, **kwargs):
+            """Drop all args"""
+            del args
+            del kwargs
+            print(text)
+
+        def __enter__(self):
+            """Just return the instance"""
+            return self
+
+        def succeed(self):
+            """nothing"""
+            pass
+
+        def __exit__(self, type, value, traceback):
+            """nothing"""
+            pass
 
 
 def http_operation(url, verb, headers=None, params=None):
@@ -49,7 +75,7 @@ def http_operation(url, verb, headers=None, params=None):
     req = urllib.request.Request(f"{url}?{params}", None, total_headers, method=verb)
 
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             the_page = response.read()
     except urllib.error.HTTPError as exception:
         print(exception)
@@ -159,6 +185,27 @@ def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequ
     return comments_text
 
 
+def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
+    """Process a single pr from the pr json data returned from the dashboard api"""
+    repo_slug = pr_data["toRef"]["repository"]["slug"]
+    project_id = pr_data["toRef"]["repository"]["project"]["key"]
+    pr_url = pr_data["links"]["self"][0]["href"]
+    # print(json.dumps(pr_data))
+
+    all_comments = get_all_comments(
+        bitbucket_url,
+        auth_header,
+        pr_data["toRef"]["repository"]["project"]["key"],
+        pr_data["toRef"]["repository"]["slug"],
+        pr_data["id"],
+    )
+
+    # look for exact match in any comment
+    if merge_trigger in all_comments:
+        # TODO actually merge ...
+        return f"Merged {pr_url} !"
+
+
 def main():
     """Program entrance point"""
     api_token = os.environ.get("POLLY_MERGE_BITBUCKET_API_TOKEN")
@@ -173,31 +220,37 @@ def main():
     auth_header = {"Authorization": "Bearer " + api_token}
 
     # 1. get all open pull requests
-    # pr_list = get_open_prs(bitbucket_url, auth_header)
-    # print(json.dumps(pr_list))
+    with Halo(text="Loading open PRs", spinner="dots") as spinner:
+        pr_list = get_open_prs(bitbucket_url, auth_header)
+        spinner.succeed()
 
-    # DEBUG
-    with open("prs2.json", "r") as pr_json:
-        pr_list = json.load(pr_json)
+    # # DEBUG use when debugging json to dump to file and load
+    # print(json.dumps(pr_list))
+    # with open("prs2.json", "r") as pr_json:
+    #     pr_list = json.load(pr_json)
 
     # 2. for each open pull request, look for the key comment
-    for pr in pr_list:
-        repo_slug = pr["toRef"]["repository"]["slug"]
-        project_id = pr["toRef"]["repository"]["project"]["key"]
-        pr_url = pr["links"]["self"][0]["href"]
-        # print(json.dumps(pr))
 
-        all_comments = get_all_comments(
-            bitbucket_url,
-            auth_header,
-            pr["toRef"]["repository"]["project"]["key"],
-            pr["toRef"]["repository"]["slug"],
-            pr["id"],
-        )
+    # user multiprocessing.dummy.Pool to use threads instead of multiple
+    # processes; this is simpler than using normal multiprocessing, because we
+    # want to pass through the config options (from env variables), and
+    # multiprocessing needs a hashable callable to run Pool.map.
+    #
+    # using python threads is suitable here because the http calls are the
+    # blocking ones, so they do a decent job yielding. using a pool speeds this
+    # up dramatically if there's lots of open pr's, because we spend most of the
+    # time waiting on the server
+    def process_pr_wrapper(pr_data):
+        return process_pr(pr_data, bitbucket_url, auth_header, merge_trigger)
 
-        # look for exact match in any comment
-        if merge_trigger in all_comments:
-            print(f"Merging {pr_url} !")
+    # issue all the pr data requests simultaneously. most won't require paging
+    # (>25 "activities") so this should be pretty good
+    with Halo(text="Checking PRs for merge comment", spinner="dots") as spinner:
+        with Pool(len(pr_list)) as pool:
+            results = pool.map(process_pr_wrapper, pr_list)
+        spinner.succeed()
+
+    print("\n".join(filter(None, results)))
 
     # 3. attempt the merge; this can fail if the merge checks are not done (eg
     #    successful build, sufficient approvals, etc)
