@@ -3,6 +3,13 @@
 Polls Bitbucket server open pull requests for a user and attempt to merge any
 pull requests with a comment containing `@polly-merge merge`.
 
+You might for example run it as a cron job to background merge your pr's instead
+of having to visit the bitbucket ui periodically.
+
+It's kindof like a really bad version of one small piece of the
+[bors-ng](https://github.com/bors-ng/bors-ng) idea, running on a local machine
+and polling instead of a reasonable system design 😖 .
+
 ## Todo
 
 Work in progress, remaining stuff:
