@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Polls open Bitbucket server pull requests for the user specified, and attempt to
-merge any that have the "@polly-merge merge" string.
+merge any that have the "@polly-merge merge" string in a comment.
 
 The following INPUTS are read from environment variables:
 
@@ -69,6 +69,86 @@ def get_url(url, headers=None, params=None):
     return http_operation(url, "GET", headers, params)
 
 
+def get_paged_api(full_url, headers, params=None):
+    """
+    read a "paged api", return the values field
+    https://docs.atlassian.com/bitbucket-server/rest/5.16.0/bitbucket-rest.html#paging-params
+    """
+    if not params:
+        params = {}
+    page_data = {"isLastPage": False, "values": []}
+    start = 0
+    while not page_data["isLastPage"]:
+        params.update({"start": start})
+
+        print(full_url)
+        single_page_ok, single_page_data, _ = get_url(
+            full_url,
+            headers=headers,
+            params=params,
+        )
+        assert single_page_ok, "error fetching list"
+
+        single_page_data = json.loads(single_page_data)
+
+        # add this page of data
+        page_data["values"].extend(single_page_data["values"])
+        page_data["isLastPage"] = single_page_data.get(
+            "isLastPage", page_data["isLastPage"]
+        )
+
+        # move to the next page
+        if "nextPageStart" in single_page_data:
+            start = single_page_data["nextPageStart"]
+        else:
+            break
+
+    return page_data["values"]
+
+
+def get_open_prs(base_url, auth_header):
+    """Return list of open prs"""
+    return get_paged_api(
+        f"{base_url}/rest/api/1.0/dashboard/pull-requests",
+        headers=auth_header,
+        params={"state": "open", "role": "author"},
+    )
+
+def recurse_comments(comment, comment_texts=[]):
+    """
+    recurse nested comments. the activities api returns stuff like:
+
+    "comment": {
+        "id": 1158611,
+        "text": "some text",
+        ...
+        "comments": [
+          {
+            ...
+            "id": 1158922,
+            "text": "some text"
+
+    etc. so recurse through it
+    """
+
+    return comment_texts
+
+def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequestid):
+    """get comments for a pr"""
+
+    # The "comments" rest api sucks. You have to specify a path (to a file in
+    # the diff) for comments, so you can't see general comments. Use the
+    # activities api instead, and parse it for comments
+    # /REST/API/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities
+    activities = get_paged_api(
+        f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities",
+        headers=auth_header,
+    )
+
+    comments = []
+
+
+
 def main():
     """Program entrance point"""
     api_token = os.environ.get("POLLY_MERGE_BITBUCKET_API_TOKEN")
@@ -81,33 +161,29 @@ def main():
     auth_header = {"Authorization": "Bearer " + api_token}
 
     # 1. get all open pull requests
-    # this is a paginated api, so watch out:
-    # https://docs.atlassian.com/bitbucket-server/rest/5.16.0/bitbucket-rest.html#paging-params
-    pr_list = {"isLastPage": False}
-    start = 0
-    while not pr_list["isLastPage"]:
-        pr_list_ok, pr_list_data, _ = get_url(
-            f"{bitbucket_url}/rest/api/1.0/dashboard/pull-requests",
-            headers=auth_header,
-            params={"state": "open", "role": "author", "start": start},
-        )
-        assert pr_list_ok, "error fetching pr list"
+    # pr_list = get_open_prs(bitbucket_url, auth_header)
 
-        pr_list_data = json.loads(pr_list_data)
-
-        # add this page of data
-        pr_list.update(pr_list_data)
-
-        # move to the next page
-        if "nextPageStart" in pr_list_data:
-            start = pr_list_data["nextPageStart"]
-        else:
-            break
-
-    # TODO just print for now...
-    print(json.dumps(pr_list["values"]))
+    # DEBUG
+    with open("prs.json", "r") as pr_json:
+        pr_list = json.load(pr_json)
 
     # 2. for each open pull request, look for the key comment
+    for pr in pr_list:
+        repo_slug = pr["toRef"]["repository"]["slug"]
+        project_id = pr["toRef"]["repository"]["project"]["key"]
+        # print(pr["links"]["self"][0]["href"])
+        print(json.dumps(pr))
+
+        # print(
+        #     get_all_comments(
+        #         bitbucket_url,
+        #         auth_header,
+        #         pr["toRef"]["repository"]["project"]["key"],
+        #         pr["toRef"]["repository"]["slug"],
+        #         pr["id"],
+        #     )
+        # )
+        break
 
     # 3. attempt the merge; this can fail if the merge checks are not done (eg
     #    successful build, sufficient approvals, etc)
