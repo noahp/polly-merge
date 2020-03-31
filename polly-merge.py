@@ -69,15 +69,18 @@ def http_operation(url, verb, headers=None, params=None):
 
     # always request JSON
     total_headers = {"Content-Type": "application/json"}
-    total_headers.update(headers)
+    if headers:
+        total_headers.update(headers)
 
     # TODO we should be able to pass params as second field but doesn't work :(
-    req = urllib.request.Request(f"{url}?{params}", None, total_headers, method=verb)
+    url = f"{url}?{params}"
+    req = urllib.request.Request(url, None, total_headers, method=verb)
 
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             the_page = response.read()
     except urllib.error.HTTPError as exception:
+        print(url)
         print(exception)
         return (False, None, None)
 
@@ -138,7 +141,7 @@ def get_open_prs(base_url, auth_header):
     )
 
 
-def recurse_comments(comments, comments_text=[]):
+def recurse_comments(comments, comments_text):
     """
     recurse nested comments. the activities api returns stuff like:
 
@@ -185,25 +188,67 @@ def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequ
     return comments_text
 
 
+def merge_pr(base_url, auth_header, projectkey, repositoryslug, pullrequestid, version):
+    """
+    Merge the specified pr.
+
+    Api is
+    projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge?version
+
+    Returns True if sucessful False otherwise
+    """
+
+    # check if the PR is ready to merge
+    pr_merge_url = f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge"
+    result, response_json, _ = get_url(pr_merge_url, headers=auth_header)
+
+    if not result:
+        return (False, f"error fetching {pr_merge_url}")
+
+    response = json.loads(response_json)
+    canMerge = response.get("canMerge")
+    if not canMerge:
+        return (False, str(response_json))
+
+    # now try to merge
+    result, _, _ = post_url(
+        pr_merge_url, headers=auth_header, params={"version": version},
+    )
+
+    return (result, "")
+
+
 def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
-    """Process a single pr from the pr json data returned from the dashboard api"""
-    repo_slug = pr_data["toRef"]["repository"]["slug"]
-    project_id = pr_data["toRef"]["repository"]["project"]["key"]
+    """
+    Process a single pr from the pr json data returned from the dashboard api
+
+    Returns:
+    - None if nothing was merged
+    - tuple of (<pr url string>, <bool success or failure>),
+    """
     pr_url = pr_data["links"]["self"][0]["href"]
     # print(json.dumps(pr_data))
+    repositoryslug = pr_data["toRef"]["repository"]["slug"]
+    projectkey = pr_data["toRef"]["repository"]["project"]["key"]
+    pullrequestid = pr_data["id"]
 
     all_comments = get_all_comments(
-        bitbucket_url,
-        auth_header,
-        pr_data["toRef"]["repository"]["project"]["key"],
-        pr_data["toRef"]["repository"]["slug"],
-        pr_data["id"],
+        bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid,
     )
 
     # look for exact match in any comment
     if merge_trigger in all_comments:
-        # TODO actually merge ...
-        return f"Merged {pr_url} !"
+        merge_ok = merge_pr(
+            bitbucket_url,
+            auth_header,
+            projectkey,
+            repositoryslug,
+            pullrequestid,
+            pr_data["version"],
+        )
+        return (pr_url, merge_ok)
+
+    return None
 
 
 def main():
@@ -243,14 +288,21 @@ def main():
     def process_pr_wrapper(pr_data):
         return process_pr(pr_data, bitbucket_url, auth_header, merge_trigger)
 
-    # issue all the pr data requests simultaneously. most won't require paging
-    # (>25 "activities") so this should be pretty good
+    # issue all the pr data requests simultaneously (up to 50). most won't
+    # require paging (>25 "activities") so this should be pretty good
     with Halo(text="Checking PRs for merge comment", spinner="dots") as spinner:
-        with Pool(len(pr_list)) as pool:
+        with Pool(min(50, len(pr_list))) as pool:
             results = pool.map(process_pr_wrapper, pr_list)
         spinner.succeed()
 
-    print("\n".join(filter(None, results)))
+    # output results from process_pr_wrapper.
+    # the return value is a tuple:
+    # ('PR URL', (True/False <success code>, string <extra info>))
+    for merged in filter(None, results):
+        if merged[1][0]:
+            print(f"Merged {merged[0]}")
+        else:
+            print(f"Failed to merge {merged[0]} : {merged[1][1]}")
 
     # 3. attempt the merge; this can fail if the merge checks are not done (eg
     #    successful build, sufficient approvals, etc)
