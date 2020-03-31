@@ -14,8 +14,6 @@ and polling instead of a reasonable system design 😖 .
 
 Work in progress, remaining stuff:
 
-- execute the merge attempt on matching pr's
-- test with merge checks blocking the merge attempt
 - actually output to the log file 😬
 - maybe rework configuration to be a little less lame (list of params?)
 - add some basic ci checks like black/pylint/sort imports at least
