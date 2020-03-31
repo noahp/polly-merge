@@ -25,7 +25,9 @@ polly-merge is a broke person's bors-ng 😔
 """
 
 import json
+import logging
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -264,8 +266,12 @@ def main():
 
     auth_header = {"Authorization": "Bearer " + api_token}
 
+    logging.basicConfig(
+        format="%(asctime)s %(message)s", level=logging.INFO, stream=sys.stdout
+    )
+
     # 1. get all open pull requests
-    with Halo(text="Loading open PRs", spinner="dots") as spinner:
+    with Halo(text="Loading open PRs", spinner="dots", stream=sys.stderr) as spinner:
         pr_list = get_open_prs(bitbucket_url, auth_header)
         spinner.succeed()
 
@@ -290,7 +296,9 @@ def main():
 
     # issue all the pr data requests simultaneously (up to 50). most won't
     # require paging (>25 "activities") so this should be pretty good
-    with Halo(text="Checking PRs for merge comment", spinner="dots") as spinner:
+    with Halo(
+        text="Checking PRs for merge comment", spinner="dots", stream=sys.stderr
+    ) as spinner:
         with Pool(min(50, len(pr_list))) as pool:
             results = pool.map(process_pr_wrapper, pr_list)
         spinner.succeed()
@@ -300,9 +308,9 @@ def main():
     # ('PR URL', (True/False <success code>, string <extra info>))
     for merged in filter(None, results):
         if merged[1][0]:
-            print(f"Merged {merged[0]}")
+            logging.info(f"Merged {merged[0]}")
         else:
-            print(f"Failed to merge {merged[0]} : {merged[1][1]}")
+            logging.info(f"Failed to merge {merged[0]} : {merged[1][1]}")
 
     # 3. attempt the merge; this can fail if the merge checks are not done (eg
     #    successful build, sufficient approvals, etc)

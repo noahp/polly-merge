@@ -10,6 +10,25 @@ It's kindof like a really bad version of one small piece of the
 [bors-ng](https://github.com/bors-ng/bors-ng) idea, running on a local machine
 and polling instead of a reasonable system design 😖 .
 
+## Usage
+
+**Requires** python3 to be installed.
+
+You might set this up to be run with cron, eg:
+
+```bash
+# grab this repo
+git clone https://github.com/noahp/polly-merge.git
+
+# add the below entry to crontab
+crontab -e
+```
+
+```crontab
+# set your token + url into the environment vars
+*/5 * * * * POLLY_MERGE_BITBUCKET_API_TOKEN=<your token> POLLY_MERGE_BITBUCKET_URL=<your url> /home/user/polly-merge/polly-merge.py >> /tmp/polly-merge.log
+```
+
 ## Todo
 
 Work in progress, remaining stuff:
