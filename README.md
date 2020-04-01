@@ -33,7 +33,6 @@ crontab -e
 
 Work in progress, remaining stuff:
 
-- actually output to the log file 😬
 - maybe rework configuration to be a little less lame (list of params?)
 - add some basic ci checks like black/pylint/sort imports at least
 

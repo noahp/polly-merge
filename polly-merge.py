@@ -9,17 +9,17 @@ POLLY_MERGE_BITBUCKET_API_TOKEN - user's api token. needs write access to merge
 
 POLLY_MERGE_BITBUCKET_URL - base url for the bitbucket server, eg https://foo.com
 
-POLLY_MERGE_LOG_FILE - path to log file, defaults to ~/polly-merge.log .
-polly-merge will write the following outputs into the file, if you want to hook
-up fsnotify watchers or whatnot:
-- successfuly merges
-- failed merges
-
 POLLY_MERGE_TRIGGER_COMMENT - modify the comment used to trigger merge,
   default is "@polly-merge merge"
 
 polly-merge could be run via a cron job to have it operate asynchronously to
 user action.
+
+it outputs progress information to stderr, and the following information to
+stdout:
+- successfull merges
+- failed merges
+eg for setting up fsnotify or something on the file where output is redirected.
 
 polly-merge is a broke person's bors-ng 😔
 """
@@ -40,11 +40,12 @@ except ImportError:
     class Halo(object):
         """Dummy class if the user doesn't have halo installed"""
 
-        def __init__(self, text=None, *args, **kwargs):
+        def __init__(self, text=None, stream=sys.stdout, *args, **kwargs):
             """Drop all args"""
             del args
             del kwargs
-            print(text)
+            if text:
+                stream.write(text + "\n")
 
         def __enter__(self):
             """Just return the instance"""
