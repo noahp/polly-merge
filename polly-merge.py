@@ -281,9 +281,9 @@ def main():
     # with open("prs2.json", "r") as pr_json:
     #     pr_list = json.load(pr_json)
 
-    # 2. for each open pull request, look for the key comment
+    # 2. for each open pull request, look for the key comment and attempt merge
 
-    # user multiprocessing.dummy.Pool to use threads instead of multiple
+    # use multiprocessing.dummy.Pool to use threads instead of multiple
     # processes; this is simpler than using normal multiprocessing, because we
     # want to pass through the config options (from env variables), and
     # multiprocessing needs a hashable callable to run Pool.map.
@@ -312,9 +312,6 @@ def main():
             logging.info(f"Merged {merged[0]}")
         else:
             logging.info(f"Failed to merge {merged[0]} : {merged[1][1]}")
-
-    # 3. attempt the merge; this can fail if the merge checks are not done (eg
-    #    successful build, sufficient approvals, etc)
 
 
 if __name__ == "__main__":
