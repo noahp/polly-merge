@@ -1,7 +1,10 @@
 # 🦜 polly-merge
 
+[![License:
+Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
+
 Polls your open pull requests on Bitbucket server, and attempts to merge any
-pull requests that have a comment containing `@polly-merge merge`.
+pull requests that have a comment containing `@polly merge` (configurable).
 
 You might for example run it as a cron job, to background merge your pr's
 instead of having to visit the bitbucket ui periodically.
@@ -18,7 +21,7 @@ You might set this up to be run with cron, eg:
 
 ```bash
 # grab this repo
-git clone https://github.com/noahp/polly-merge.git
+git clone https://github.com/noahp/polly-merge.git ~/polly-merge
 
 # add the below entry to crontab
 crontab -e
@@ -26,7 +29,10 @@ crontab -e
 
 ```crontab
 # set your token + url into the environment vars
-*/5 * * * * POLLY_MERGE_BITBUCKET_API_TOKEN=<your token> POLLY_MERGE_BITBUCKET_URL=<your url> /home/user/polly-merge/polly-merge.py >> /tmp/polly-merge.log
+POLLY_MERGE_BITBUCKET_API_TOKEN=<your token>
+POLLY_MERGE_BITBUCKET_URL=<your url>
+# log to /tmp/polly-merge.log
+*/5 * * * * ~/polly-merge/polly-merge.py >> /tmp/polly-merge.log
 ```
 
 ## Todo

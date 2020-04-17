@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Polls open Bitbucket server pull requests for the user specified, and attempt to
-merge any that have the "@polly-merge merge" string in a comment.
+merge any that have the "@polly merge" string in a comment.
 
 The following INPUTS are read from environment variables:
 
@@ -10,7 +10,7 @@ POLLY_MERGE_BITBUCKET_API_TOKEN - user's api token. needs write access to merge
 POLLY_MERGE_BITBUCKET_URL - base url for the bitbucket server, eg https://foo.com
 
 POLLY_MERGE_TRIGGER_COMMENT - modify the comment used to trigger merge,
-  default is "@polly-merge merge"
+  default is "@polly merge"
 
 polly-merge could be run via a cron job to have it operate asynchronously to
 user action.
@@ -263,7 +263,7 @@ def main():
 
     log_file = os.environ.get("POLLY_MERGE_LOG_FILE", "~/polly-merge.log")
 
-    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly-merge merge")
+    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly merge")
 
     auth_header = {"Authorization": "Bearer " + api_token}
 
