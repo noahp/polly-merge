@@ -17,7 +17,7 @@ user action.
 
 it outputs progress information to stderr, and the following information to
 stdout:
-- successfull merges
+- successful merges
 - failed merges
 eg for setting up fsnotify or something on the file where output is redirected.
 
@@ -114,7 +114,7 @@ def get_paged_api(full_url, headers, params=None):
         params.update({"start": start})
 
         single_page_ok, single_page_data, _ = get_url(
-            full_url, headers=headers, params=params,
+            full_url, headers=headers, params=params
         )
         assert single_page_ok, "error fetching list"
 
@@ -215,7 +215,7 @@ def merge_pr(base_url, auth_header, projectkey, repositoryslug, pullrequestid, v
 
     # now try to merge
     result, _, _ = post_url(
-        pr_merge_url, headers=auth_header, params={"version": version},
+        pr_merge_url, headers=auth_header, params={"version": version}
     )
 
     return (result, "")
@@ -235,12 +235,13 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
     projectkey = pr_data["toRef"]["repository"]["project"]["key"]
     pullrequestid = pr_data["id"]
 
-    all_comments = get_all_comments(
-        bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid,
-    )
+    def get_comments():
+        return get_all_comments(
+            bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid
+        )
 
-    # look for exact match in any comment
-    if merge_trigger in all_comments:
+    # look for exact match in PR description or any comment
+    if merge_trigger in pr_data["description"] or merge_trigger in get_comments():
         merge_ok = merge_pr(
             bitbucket_url,
             auth_header,
