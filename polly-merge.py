@@ -241,7 +241,7 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
         )
 
     # look for exact match in PR description or any comment
-    if merge_trigger in pr_data["description"] or merge_trigger in get_comments():
+    if merge_trigger in pr_data.get("description", "") or merge_trigger in get_comments():
         merge_ok = merge_pr(
             bitbucket_url,
             auth_header,
