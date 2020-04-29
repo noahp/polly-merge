@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Polls open Bitbucket server pull requests for the user specified, and attempt to
-merge any that have the "@polly merge" string in a comment.
+merge any that have the "@polly <COMMAND>" string in a comment.
 
 The following INPUTS are read from environment variables:
 
@@ -10,7 +10,7 @@ POLLY_MERGE_BITBUCKET_API_TOKEN - user's api token. needs write access to merge
 POLLY_MERGE_BITBUCKET_URL - base url for the bitbucket server, eg https://foo.com
 
 POLLY_MERGE_TRIGGER_COMMENT - modify the comment used to trigger merge,
-  default is "@polly merge"
+  default is "@polly"
 
 POLLY_MERGE_LOG_FILE - file to output logs to, e.g. /tmp/polly-merge.log
   outputs to stdout if log file is not specified
@@ -30,6 +30,7 @@ polly-merge is a broke person's bors-ng 😔
 import json
 import logging
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -194,6 +195,23 @@ def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequ
     return comments_text
 
 
+def is_pr_merged(base_url, auth_header, projectkey, repositoryslug, pullrequestid):
+    """
+    Check if a specific PR is merged
+
+    Returns True if the specificed PR is merged False otherwise
+    """
+    url = f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}"
+    result, response_json, _ = get_url(url, headers=auth_header)
+
+    if not result:
+        return False
+
+    response = json.loads(response_json)
+    pr_state = response.get("state", "")
+    return pr_state == "MERGED"
+
+
 def merge_pr(base_url, auth_header, projectkey, repositoryslug, pullrequestid, version):
     """
     Merge the specified pr.
@@ -229,7 +247,7 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
     Process a single pr from the pr json data returned from the dashboard api
 
     Returns:
-    - None if nothing was merged
+    - None if merge_trigger wasn't detected
     - tuple of (<pr url string>, <bool success or failure>),
     """
     pr_url = pr_data["links"]["self"][0]["href"]
@@ -243,8 +261,13 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
             bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid
         )
 
-    # look for exact match in PR description or any comment
-    if merge_trigger in pr_data.get("description", "") or merge_trigger in get_comments():
+    # search thorough PR description and comments
+    search = [pr_data.get("description", "")]
+    search.extend(get_comments())
+
+    # command: merge
+    r = re.compile(f"{merge_trigger} merge$")
+    if list(filter(r.match, search)):
         merge_ok = merge_pr(
             bitbucket_url,
             auth_header,
@@ -254,6 +277,25 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
             pr_data["version"],
         )
         return (pr_url, merge_ok)
+
+    # command: merge wait-for
+    r = re.compile(f"{merge_trigger} merge wait-for (.*):(.*):(.*)$")
+    matches = list(filter(r.match, search))
+    if matches:
+        m = r.match(matches[0])
+        pr_project = m.group(1)
+        pr_repo = m.group(2)
+        pr_id = m.group(3)
+        if is_pr_merged(bitbucket_url, auth_header, pr_project, pr_repo, pr_id):
+            merge_ok = merge_pr(
+                bitbucket_url,
+                auth_header,
+                projectkey,
+                repositoryslug,
+                pullrequestid,
+                pr_data["version"],
+            )
+            return (pr_url, merge_ok)
 
     return None
 
@@ -267,7 +309,7 @@ def main():
 
     log_file = os.environ.get("POLLY_MERGE_LOG_FILE")
 
-    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly merge")
+    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly")
 
     auth_header = {"Authorization": "Bearer " + api_token}
 
