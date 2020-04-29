@@ -15,13 +15,17 @@ and polling instead of a reasonable system design 😖 .
 
 ## Commands
 
-### merge
+### `merge`
 
-Attempts to merge the PR.
+Attempts to merge the PR, ex:
 
-### merge wait-for <PR_PROJECT>:<PR_REPO>:<PR_ID>
+`@polly merge`
 
-Attempts to merge the PR only after the given PR has been merged.
+### `merge-after <pr url>`
+
+Attempts to merge the PR only after the given PR has been merged, ex:
+
+`@polly merge-after https://bitbucket-server.com/projects/PROJ/repos/some-repo/pull-requests/1234`
 
 ## Usage
 
@@ -51,6 +55,7 @@ Work in progress, remaining stuff:
 
 - maybe rework configuration to be a little less lame (list of params?)
 - add some basic ci checks like black/pylint/sort imports at least
+- logging?
 
 This should probably not be python but I'm reallllly lazy.
 

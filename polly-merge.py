@@ -61,7 +61,7 @@ except ImportError:
             pass
 
 
-def http_operation(url, verb, headers=None, params=None):
+def http_operation(url, verb, headers=None, params=""):
     """
     execute the HTTP verb. return tuple of:
     ( <bool success?>, <response data>, <response headers> )
@@ -69,7 +69,7 @@ def http_operation(url, verb, headers=None, params=None):
 
     # encode the url-params
     if params:
-        params = urllib.parse.urlencode(params)
+        params = f"?{urllib.parse.urlencode(params)}"
 
     # always request JSON
     total_headers = {"Content-Type": "application/json"}
@@ -77,7 +77,7 @@ def http_operation(url, verb, headers=None, params=None):
         total_headers.update(headers)
 
     # TODO we should be able to pass params as second field but doesn't work :(
-    url = f"{url}?{params}"
+    url = f"{url}{params}"
     req = urllib.request.Request(url, None, total_headers, method=verb)
 
     try:
@@ -92,12 +92,12 @@ def http_operation(url, verb, headers=None, params=None):
     return (True, the_page, None)
 
 
-def post_url(url, headers=None, params=None):
+def post_url(url, headers=None, params=""):
     """Simple POST"""
     return http_operation(url, "POST", headers, params)
 
 
-def get_url(url, headers=None, params=None):
+def get_url(url, headers=None, params=""):
     """Simple GET"""
     return http_operation(url, "GET", headers, params)
 
@@ -192,14 +192,17 @@ def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequ
     return comments_text
 
 
-def is_pr_merged(base_url, auth_header, projectkey, repositoryslug, pullrequestid):
+def is_pr_merged(base_url, auth_header, pr_url_stem):
     """
     Check if a specific PR is merged
 
     Returns True if the specificed PR is merged False otherwise
+
+    "pr_url_stem" should look like "/projects/<project name>/repos/<repo slug>/pull-requests/<pr id>"
     """
-    url = f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}"
-    result, response_json, _ = get_url(url, headers=auth_header)
+    result, response_json, _ = get_url(
+        f"{base_url}/rest/api/1.0{pr_url_stem}", headers=auth_header
+    )
 
     if not result:
         return False
@@ -245,7 +248,12 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
 
     Returns:
     - None if merge_trigger wasn't detected
-    - tuple of (<pr url string>, <bool success or failure>),
+    - tuple(
+        <pr url string>,
+        tuple(
+            <bool success or failure>, <string of failure reason>
+        ),
+      )
     """
     pr_url = pr_data["links"]["self"][0]["href"]
     # print(json.dumps(pr_data))
@@ -258,13 +266,9 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
             bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid
         )
 
-    # search thorough PR description and comments
-    search = [pr_data.get("description", "")]
-    search.extend(get_comments())
-
-    # command: merge
-    r = re.compile(f"{merge_trigger} merge$")
-    if list(filter(r.match, search)):
+    def just_merge(match):
+        """Issue a non conditional merge"""
+        del match
         merge_ok = merge_pr(
             bitbucket_url,
             auth_header,
@@ -275,26 +279,37 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
         )
         return (pr_url, merge_ok)
 
-    # command: merge wait-for
-    r = re.compile(f"{merge_trigger} merge wait-for (.*):(.*):(.*)$")
-    matches = list(filter(r.match, search))
-    if matches:
-        m = r.match(matches[0])
-        pr_project = m.group(1)
-        pr_repo = m.group(2)
-        pr_id = m.group(3)
-        if is_pr_merged(bitbucket_url, auth_header, pr_project, pr_repo, pr_id):
-            merge_ok = merge_pr(
-                bitbucket_url,
-                auth_header,
-                projectkey,
-                repositoryslug,
-                pullrequestid,
-                pr_data["version"],
-            )
-            return (pr_url, merge_ok)
+    def merge_after(match):
+        """Issue a merge if the matched url is merged"""
+        other_pr_url = match[1]
+        other_pr_url_stem = urllib.parse.urlsplit(other_pr_url)[2]
 
-    return None
+        if is_pr_merged(bitbucket_url, auth_header, other_pr_url_stem):
+            return just_merge(match)
+        else:
+            return (pr_url, (False, f"{other_pr_url} not merged yet!"))
+
+    # dictionary of regex-pattern: command to run on match
+    commands = {
+        # command: merge
+        re.compile(f"{merge_trigger} merge$"): just_merge,
+        # command: merge-after <url>
+        re.compile(f"{merge_trigger} merge-after (.*)$"): merge_after,
+    }
+
+    def process_commands(list_to_check):
+        """Check for match and run command on list_to_check"""
+        for pattern, command in commands.items():
+            if match := list(filter(None, map(pattern.match, list_to_check))):
+                return command(match[0])
+        return None
+
+    # check PR description then comments. order is important; we don't want to
+    # do the relatively expensive fetch of comments for a PR if the description
+    # has a match
+    return process_commands([pr_data.get("description", "")]) or process_commands(
+        get_comments()
+    )
 
 
 def main():
