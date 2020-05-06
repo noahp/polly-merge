@@ -244,7 +244,10 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
         )
 
     # look for exact match in PR description or any comment
-    if merge_trigger in pr_data.get("description", "") or merge_trigger in get_comments():
+    if (
+        merge_trigger in pr_data.get("description", "")
+        or merge_trigger in get_comments()
+    ):
         merge_ok = merge_pr(
             bitbucket_url,
             auth_header,
@@ -265,23 +268,22 @@ def main():
     bitbucket_url = os.environ.get("POLLY_MERGE_BITBUCKET_URL")
     assert bitbucket_url, "Please set POLLY_MERGE_BITBUCKET_URL!"
 
-    log_file = os.environ.get("POLLY_MERGE_LOG_FILE")
-
     merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly merge")
 
-    auth_header = {"Authorization": "Bearer " + api_token}
-
+    # log to file if set, or stdout if not
+    log_file = os.environ.get("POLLY_MERGE_LOG_FILE")
+    log_args = {
+        "format": "%(asctime)s $(message)s",
+        "level": logging.INFO,
+    }
     if log_file:
-        # output to specified log file if variable is set
-        logging.basicConfig(
-            format="%(asctime)s $(message)s", level=logging.INFO, filename=log_file, filemode='w'
-        )
+        log_args.update({"filename": log_file, "filemode": "w"})
     else:
-        # default logging to stdout if no log file is specified
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", level=logging.INFO, stream=sys.stdout
-        )
+        log_args.update({"stream": sys.stdout})
 
+    logging.basicConfig(**log_args)
+
+    auth_header = {"Authorization": "Bearer " + api_token}
     # 1. get all open pull requests
     with Halo(text="Loading open PRs", spinner="dots", stream=sys.stderr) as spinner:
         pr_list = get_open_prs(bitbucket_url, auth_header)
