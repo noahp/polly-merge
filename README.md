@@ -15,13 +15,15 @@ and polling instead of a reasonable system design 😖 .
 
 ## Commands
 
-### merge
+### `merge`
 
 Attempts to merge the PR.
 
-### merge wait-for <PR_PROJECT>:<PR_REPO>:<PR_ID>
+### `merge-after <pr url>`
 
-Attempts to merge the PR only after the given PR has been merged.
+Attempts to merge the PR only after the given PR has been merged, ex:
+
+`@polly merge-after https://bitbucket-server.com/projects/PROJ/repos/some-repo/pull-requests/1234`
 
 ## Usage
 
