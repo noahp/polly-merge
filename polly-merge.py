@@ -281,14 +281,20 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
         )
         return (pr_url, merge_ok)
 
-    return None
-
     def merge_after(match):
         """Issue a merge if the matched url is merged"""
         other_pr_url = match[1]
         other_pr_url_stem = urllib.parse.urlsplit(other_pr_url)[2]
 
-        if is_pr_merged(bitbucket_url, auth_header, other_pr_url_stem):
+        # basic sanity check URL is valid
+        # strip off anything post PR-ID (such as /overview /diff)
+        match = re.match(
+            "(/projects/.*/repos/.*/pull-requests/[0-9]*)[/.*]?", other_pr_url_stem
+        )
+        if not match:
+            return (pr_url, (False, f"invalid pr_url {other_pr_url}"))
+
+        if is_pr_merged(bitbucket_url, auth_header, match[1]):
             return just_merge(match)
         else:
             return (pr_url, (False, f"{other_pr_url} not merged yet!"))
