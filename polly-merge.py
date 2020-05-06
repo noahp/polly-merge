@@ -247,8 +247,6 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
     """
     Process a single pr from the pr json data returned from the dashboard api
     Returns:
-    - None if nothing was merged
-    - tuple of (<pr url string>, <bool success or failure>),
     - None if merge_trigger wasn't detected
     - tuple(
         <pr url string>,
@@ -321,7 +319,6 @@ def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
         get_comments()
     )
 
-    return None
 
 
 def main():
