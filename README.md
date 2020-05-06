@@ -31,8 +31,11 @@ crontab -e
 # set your token + url into the environment vars
 POLLY_MERGE_BITBUCKET_API_TOKEN=<your token>
 POLLY_MERGE_BITBUCKET_URL=<your url>
-# log to /tmp/polly-merge.log
-*/5 * * * * ~/polly-merge/polly-merge.py >> /tmp/polly-merge.log
+# defaults to "@polly merge"
+POLLY_MERGE_TRIGGER_COMMENT=<your trigger comment>
+# defaults to /tmp/polly-merge.log
+POLLY_MERGE_LOG_FILE=<your log file location>
+*/5 * * * * ~/polly-merge/polly-merge.py
 ```
 
 ## Todo
