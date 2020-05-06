@@ -4,7 +4,7 @@
 Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 
 Polls your open pull requests on Bitbucket server, and attempts to merge any
-pull requests that have a comment containing `@polly merge` (configurable).
+pull requests that have a comment containing `@polly <COMMAND>` (configurable).
 
 You might for example run it as a cron job, to background merge your pr's
 instead of having to visit the bitbucket ui periodically.
@@ -12,6 +12,18 @@ instead of having to visit the bitbucket ui periodically.
 It's kindof like a really bad version of one small piece of the
 [bors-ng](https://github.com/bors-ng/bors-ng) idea, running on a local machine
 and polling instead of a reasonable system design 😖 .
+
+## Commands
+
+### `merge`
+
+Attempts to merge the PR.
+
+### `merge-after <pr url>`
+
+Attempts to merge the PR only after the given PR has been merged, ex:
+
+`@polly merge-after https://bitbucket-server.com/projects/PROJ/repos/some-repo/pull-requests/1234`
 
 ## Usage
 
