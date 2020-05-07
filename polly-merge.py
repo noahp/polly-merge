@@ -41,10 +41,10 @@ try:
     from halo import Halo
 except ImportError:
 
-    class Halo(object):
+    class Halo:
         """Dummy class if the user doesn't have halo installed"""
 
-        def __init__(self, text=None, stream=sys.stdout, *args, **kwargs):
+        def __init__(self, *args, text=None, stream=sys.stdout, **kwargs):
             """Drop all args"""
             del args
             del kwargs
@@ -57,11 +57,9 @@ except ImportError:
 
         def succeed(self):
             """nothing"""
-            pass
 
-        def __exit__(self, type, value, traceback):
+        def __exit__(self, exc_type, exc_value, exc_traceback):
             """nothing"""
-            pass
 
 
 def http_operation(url, verb, headers=None, params=""):
@@ -139,186 +137,182 @@ def get_paged_api(full_url, headers, params=None):
     return page_data["values"]
 
 
-def get_open_prs(base_url, auth_header):
-    """Return list of open prs"""
-    return get_paged_api(
-        f"{base_url}/rest/api/1.0/dashboard/pull-requests",
-        headers=auth_header,
-        params={"state": "open", "role": "author"},
-    )
+class BitbucketApi:
+    """Used to interact with the bitbucket api"""
 
+    def __init__(self, base_url, auth_header):
+        self.base_url = base_url
+        self.auth_header = auth_header
 
-def recurse_comments(comments, comments_text):
-    """
-    recurse nested comments. the activities api returns stuff like:
+    def get_open_prs(self):
+        """Return list of open prs"""
+        return get_paged_api(
+            f"{self.base_url}/rest/api/1.0/dashboard/pull-requests",
+            headers=self.auth_header,
+            params={"state": "open", "role": "author"},
+        )
 
-    "comment": {
-        "id": 1158611,
-        "text": "some text",
-        ...
-        "comments": [
-          {
+    @staticmethod
+    def recurse_comments(comments, comments_text):
+        """
+        recurse nested comments. the activities api returns stuff like:
+
+        "comment": {
+            "id": 1158611,
+            "text": "some text",
             ...
-            "id": 1158922,
-            "text": "some text"
+            "comments": [
+            {
+                ...
+                "id": 1158922,
+                "text": "some text"
 
-    etc. so recurse through it
-    """
-    for comment in comments:
-        comments_text.append(comment["text"])
-        recurse_comments(comment["comments"], comments_text)
-
-
-def get_all_comments(base_url, auth_header, projectkey, repositoryslug, pullrequestid):
-    """get comments for a pr"""
-
-    # The "comments" rest api sucks. You have to specify a path (to a file in
-    # the diff) for comments, so you can't see general comments. Use the
-    # activities api instead, and parse it for comments
-    # /REST/API/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities
-    activities = get_paged_api(
-        f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities",
-        headers=auth_header,
-    )
-
-    comments_text = []
-    for activity in activities:
-        if activity["action"] == "COMMENTED":
-            comment = activity["comment"]
-
-            # for now, just add the raw text from each comment
+        etc. so recurse through it
+        """
+        for comment in comments:
             comments_text.append(comment["text"])
+            BitbucketApi.recurse_comments(comment["comments"], comments_text)
 
-            # recurse through nested comments
-            recurse_comments(comment["comments"], comments_text)
+    def get_all_comments(self, projectkey, repositoryslug, pullrequestid):
+        """get comments for a pr"""
 
-    return comments_text
-
-
-def is_pr_merged(base_url, auth_header, pr_url_stem):
-    """
-    Check if a specific PR is merged
-    Returns True if the specificed PR is merged False otherwise
-    "pr_url_stem" should look like "/projects/<project name>/repos/<repo slug>/pull-requests/<pr id>"
-    """
-    result, response_json, _ = get_url(
-        f"{base_url}/rest/api/1.0{pr_url_stem}", headers=auth_header
-    )
-
-    if not result:
-        return False
-
-    response = json.loads(response_json)
-    pr_state = response.get("state", "")
-    return pr_state == "MERGED"
-
-
-def merge_pr(base_url, auth_header, projectkey, repositoryslug, pullrequestid, version):
-    """
-    Merge the specified pr.
-
-    Api is
-    projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge?version
-
-    Returns True if sucessful False otherwise
-    """
-
-    # check if the PR is ready to merge
-    pr_merge_url = f"{base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge"
-    result, response_json, _ = get_url(pr_merge_url, headers=auth_header)
-
-    if not result:
-        return (False, f"error fetching {pr_merge_url}")
-
-    response = json.loads(response_json)
-    canMerge = response.get("canMerge")
-    if not canMerge:
-        return (False, str(response_json))
-
-    # now try to merge
-    result, _, _ = post_url(
-        pr_merge_url, headers=auth_header, params={"version": version}
-    )
-
-    return (result, "")
-
-
-def process_pr(pr_data, bitbucket_url, auth_header, merge_trigger):
-    """
-    Process a single pr from the pr json data returned from the dashboard api
-    Returns:
-    - None if merge_trigger wasn't detected
-    - tuple(
-        <pr url string>,
-        tuple(
-            <bool success or failure>, <string of failure reason>
-        ),
-      )
-    """
-    pr_url = pr_data["links"]["self"][0]["href"]
-    # print(json.dumps(pr_data))
-    repositoryslug = pr_data["toRef"]["repository"]["slug"]
-    projectkey = pr_data["toRef"]["repository"]["project"]["key"]
-    pullrequestid = pr_data["id"]
-
-    def get_comments():
-        return get_all_comments(
-            bitbucket_url, auth_header, projectkey, repositoryslug, pullrequestid
+        # The "comments" rest api sucks. You have to specify a path (to a file in
+        # the diff) for comments, so you can't see general comments. Use the
+        # activities api instead, and parse it for comments
+        # /REST/API/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities
+        activities = get_paged_api(
+            f"{self.base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/activities",
+            headers=self.auth_header,
         )
 
-    def just_merge(match):
-        """Issue a non conditional merge"""
-        del match
-        merge_ok = merge_pr(
-            bitbucket_url,
-            auth_header,
-            projectkey,
-            repositoryslug,
-            pullrequestid,
-            pr_data["version"],
+        comments_text = []
+        for activity in activities:
+            if activity["action"] == "COMMENTED":
+                comment = activity["comment"]
+
+                # for now, just add the raw text from each comment
+                comments_text.append(comment["text"])
+
+                # recurse through nested comments
+                self.recurse_comments(comment["comments"], comments_text)
+
+        return comments_text
+
+    def is_pr_merged(self, pr_url_stem):
+        """
+        Check if a specific PR is merged
+        Returns True if the specificed PR is merged False otherwise
+        "pr_url_stem" should look like "/projects/<project name>/repos/<repo slug>/pull-requests/<pr id>"
+        """
+        result, response_json, _ = get_url(
+            f"{self.base_url}/rest/api/1.0{pr_url_stem}", headers=self.auth_header
         )
-        return (pr_url, merge_ok)
 
-    def merge_after(match):
-        """Issue a merge if the matched url is merged"""
-        other_pr_url = match[1]
-        other_pr_url_stem = urllib.parse.urlsplit(other_pr_url)[2]
+        if not result:
+            return False
 
-        # basic sanity check URL is valid
-        # strip off anything post PR-ID (such as /overview /diff)
-        match = re.match(
-            "(/projects/.*/repos/.*/pull-requests/[0-9]*)[/.*]?", other_pr_url_stem
+        response = json.loads(response_json)
+        pr_state = response.get("state", "")
+        return pr_state == "MERGED"
+
+    def merge_pr(self, projectkey, repositoryslug, pullrequestid, version):
+        """
+        Merge the specified pr.
+
+        Api is
+        projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge?version
+
+        Returns True if sucessful False otherwise
+        """
+
+        # check if the PR is ready to merge
+        pr_merge_url = f"{self.base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge"
+        result, response_json, _ = get_url(pr_merge_url, headers=self.auth_header)
+
+        if not result:
+            return (False, f"error fetching {pr_merge_url}")
+
+        response = json.loads(response_json)
+        canmerge = response.get("canMerge")
+        if not canmerge:
+            return (False, str(response_json))
+
+        # now try to merge
+        result, _, _ = post_url(
+            pr_merge_url, headers=self.auth_header, params={"version": version}
         )
-        if not match:
-            return (pr_url, (False, f"invalid pr_url {other_pr_url}"))
 
-        if is_pr_merged(bitbucket_url, auth_header, match[1]):
-            return just_merge(match)
-        else:
+        return (result, "")
+
+    def process_pr(self, pr_data, merge_trigger):
+        """
+        Process a single pr from the pr json data returned from the dashboard api
+        Returns:
+        - None if merge_trigger wasn't detected
+        - tuple(
+            <pr url string>,
+            tuple(
+                <bool success or failure>, <string of failure reason>
+            ),
+        )
+        """
+        pr_url = pr_data["links"]["self"][0]["href"]
+        # print(json.dumps(pr_data))
+        repositoryslug = pr_data["toRef"]["repository"]["slug"]
+        projectkey = pr_data["toRef"]["repository"]["project"]["key"]
+        pullrequestid = pr_data["id"]
+
+        def get_comments():
+            return self.get_all_comments(projectkey, repositoryslug, pullrequestid)
+
+        def just_merge(match):
+            """Issue a non conditional merge"""
+            del match
+            merge_ok = self.merge_pr(
+                projectkey, repositoryslug, pullrequestid, pr_data["version"],
+            )
+            return (pr_url, merge_ok)
+
+        def merge_after(match):
+            """Issue a merge if the matched url is merged"""
+            other_pr_url = match[1]
+            other_pr_url_stem = urllib.parse.urlsplit(other_pr_url)[2]
+
+            # basic sanity check URL is valid
+            # strip off anything post PR-ID (such as /overview /diff)
+            match = re.match(
+                "(/projects/.*/repos/.*/pull-requests/[0-9]*)[/.*]?", other_pr_url_stem
+            )
+            if not match:
+                return (pr_url, (False, f"invalid pr_url {other_pr_url}"))
+
+            if self.is_pr_merged(match[1]):
+                return just_merge(match)
+
             return (pr_url, (False, f"{other_pr_url} not merged yet!"))
 
-    # dictionary of regex-pattern: command to run on match
-    commands = {
-        # command: merge
-        re.compile(f"{merge_trigger} merge$"): just_merge,
-        # command: merge-after <url>
-        re.compile(f"{merge_trigger} merge-after (.*)$"): merge_after,
-    }
+        # dictionary of regex-pattern: command to run on match
+        commands = {
+            # command: merge
+            re.compile(f"{merge_trigger} merge$"): just_merge,
+            # command: merge-after <url>
+            re.compile(f"{merge_trigger} merge-after (.*)$"): merge_after,
+        }
 
-    def process_commands(list_to_check):
-        """Check for match and run command on list_to_check"""
-        for pattern, command in commands.items():
-            if match := list(filter(None, map(pattern.match, list_to_check))):
-                return command(match[0])
-        return None
+        def process_commands(list_to_check):
+            """Check for match and run command on list_to_check"""
+            for pattern, command in commands.items():
+                match = list(filter(None, map(pattern.match, list_to_check)))
+                if match:
+                    return command(match[0])
+            return None
 
-    # check PR description then comments. order is important; we don't want to
-    # do the relatively expensive fetch of comments for a PR if the description
-    # has a match
-    return process_commands([pr_data.get("description", "")]) or process_commands(
-        get_comments()
-    )
-
+        # check PR description then comments. order is important; we don't want to
+        # do the relatively expensive fetch of comments for a PR if the description
+        # has a match
+        return process_commands([pr_data.get("description", "")]) or process_commands(
+            get_comments()
+        )
 
 
 def main():
@@ -348,9 +342,11 @@ def main():
             format="%(asctime)s %(message)s", level=logging.INFO, stream=sys.stdout
         )
 
+    bitbucket = BitbucketApi(base_url=bitbucket_url, auth_header=auth_header)
+
     # 1. get all open pull requests
     with Halo(text="Loading open PRs", spinner="dots", stream=sys.stderr) as spinner:
-        pr_list = get_open_prs(bitbucket_url, auth_header)
+        pr_list = bitbucket.get_open_prs()
         spinner.succeed()
 
     # # DEBUG use when debugging json to dump to file and load
@@ -370,7 +366,7 @@ def main():
     # up dramatically if there's lots of open pr's, because we spend most of the
     # time waiting on the server
     def process_pr_wrapper(pr_data):
-        return process_pr(pr_data, bitbucket_url, auth_header, merge_trigger)
+        return bitbucket.process_pr(pr_data, merge_trigger)
 
     # issue all the pr data requests simultaneously (up to 50). most won't
     # require paging (>25 "activities") so this should be pretty good
