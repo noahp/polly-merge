@@ -27,3 +27,53 @@ disable=""",
 good-names=""",
       polly-merge,
 """
+
+[tool.tox]
+# https://tox.readthedocs.io/en/latest/example/basic.html#pyproject-toml-tox-legacy-ini
+legacy_tox_ini = """
+# tox (https://tox.readthedocs.io/) is a tool for running tests
+# in multiple virtualenvs. This configuration file will run the
+# test suite on all supported python versions. To use it, "pip install tox"
+# and then run "tox" from this directory.
+#
+
+[build-system]
+requires = [ "setuptools == 40.6.3", "wheel == 0.32.3"]
+
+[tox]
+isolated_build = True
+requires = tox-conda
+envlist =
+    {py36,py37,py38}-stable
+    black
+    isort
+
+[testenv]
+conda_channels=
+    conda-forge
+deps =
+    py36,py37,py38: pylint==2.5.0
+whitelist_externals =
+    /bin/bash
+    /bin/echo
+setenv =
+    TOX_INI_DIR = {toxinidir}
+commands =
+    pylint polly-merge.py
+
+# black formatting required
+[testenv:black]
+deps=
+    black==19.10b0
+basepython=python3
+commands=
+    black --check --verbose .
+
+# verify imports are sorted properly
+[testenv:isort]
+deps=
+    isort[pyproject]==4.3.9
+basepython=python3
+commands=
+    bash -c "cd {toxinidir} && isort -c"
+"""
