@@ -36,33 +36,35 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from multiprocessing.dummy import Pool
+from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    from halo import Halo
-except ImportError:
-
-    class Halo:
-        """Dummy class if the user doesn't have halo installed"""
-
-        def __init__(self, *args, text=None, stream=sys.stdout, **kwargs):
-            """Drop all args"""
-            del args
-            del kwargs
-            if text:
-                stream.write(text + "\n")
-
-        def __enter__(self):
-            """Just return the instance"""
-            return self
-
-        def succeed(self):
-            """nothing"""
-
-        def __exit__(self, exc_type, exc_value, exc_traceback):
-            """nothing"""
+# try:
+#     from halo import Halo
+# except ImportError:
 
 
-def http_operation(url, verb, headers=None, params=""):
+class Halo:
+    """Dummy class if the user doesn't have halo installed"""
+
+    def __init__(self, *args, text=None, stream=sys.stdout, **kwargs):
+        """Drop all args"""
+        del args
+        del kwargs
+        if text:
+            stream.write(text + "\n")
+
+    def __enter__(self):
+        """Just return the instance"""
+        return self
+
+    def succeed(self):
+        """nothing"""
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        """nothing"""
+
+
+def http_operation(url, verb, headers=None, params="") -> Tuple[bool, bytes]:
     """
     execute the HTTP verb. return tuple of:
     ( <bool success?>, <response data>, <response headers> )
@@ -87,18 +89,18 @@ def http_operation(url, verb, headers=None, params=""):
     except urllib.error.HTTPError as exception:
         print(url)
         print(exception)
-        return (False, None, None)
+        return (False, bytes())
 
     # TODO pass response code? + headers
-    return (True, the_page, None)
+    return (True, the_page)
 
 
-def post_url(url, headers=None, params=""):
+def post_url(url, headers=None, params="") -> Tuple[bool, bytes]:
     """Simple POST"""
     return http_operation(url, "POST", headers, params)
 
 
-def get_url(url, headers=None, params=""):
+def get_url(url, headers=None, params="") -> Tuple[bool, bytes]:
     """Simple GET"""
     return http_operation(url, "GET", headers, params)
 
@@ -115,7 +117,7 @@ def get_paged_api(full_url, headers, params=None):
     while not page_data["isLastPage"]:
         params.update({"start": start})
 
-        single_page_ok, single_page_data, _ = get_url(
+        single_page_ok, single_page_data = get_url(
             full_url, headers=headers, params=params
         )
         assert single_page_ok, "error fetching list"
@@ -173,7 +175,7 @@ class BitbucketApi:
             comments_text.append(comment["text"])
             BitbucketApi.recurse_comments(comment["comments"], comments_text)
 
-    def get_all_comments(self, projectkey, repositoryslug, pullrequestid):
+    def get_all_comments(self, projectkey, repositoryslug, pullrequestid) -> List[str]:
         """get comments for a pr"""
 
         # The "comments" rest api sucks. You have to specify a path (to a file in
@@ -198,13 +200,13 @@ class BitbucketApi:
 
         return comments_text
 
-    def is_pr_merged(self, pr_url_stem):
+    def is_pr_merged(self, pr_url_stem) -> bool:
         """
         Check if a specific PR is merged
         Returns True if the specificed PR is merged False otherwise
         "pr_url_stem" should look like "/projects/<project name>/repos/<repo slug>/pull-requests/<pr id>"
         """
-        result, response_json, _ = get_url(
+        result, response_json = get_url(
             f"{self.base_url}/rest/api/1.0{pr_url_stem}", headers=self.auth_header
         )
 
@@ -215,7 +217,9 @@ class BitbucketApi:
         pr_state = response.get("state", "")
         return pr_state == "MERGED"
 
-    def merge_pr(self, projectkey, repositoryslug, pullrequestid, version):
+    def merge_pr(
+        self, projectkey, repositoryslug, pullrequestid, version
+    ) -> Tuple[bool, str]:
         """
         Merge the specified pr.
 
@@ -226,8 +230,8 @@ class BitbucketApi:
         """
 
         # check if the PR is ready to merge
-        pr_merge_url = f"{self.base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge"
-        result, response_json, _ = get_url(pr_merge_url, headers=self.auth_header)
+        pr_merge_url: str = f"{self.base_url}/rest/api/1.0/projects/{projectkey}/repos/{repositoryslug}/pull-requests/{pullrequestid}/merge"
+        result, response_json = get_url(pr_merge_url, headers=self.auth_header)
 
         if not result:
             return (False, f"error fetching {pr_merge_url}")
@@ -238,7 +242,7 @@ class BitbucketApi:
             return (False, str(response_json))
 
         # now try to merge
-        result, _, _ = post_url(
+        result, _ = post_url(
             pr_merge_url, headers=self.auth_header, params={"version": version}
         )
 
