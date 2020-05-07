@@ -1,10 +1,19 @@
 # 🦜 polly-merge
 
 [![License:
-Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
+Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg?style=for-the-badge)](http://unlicense.org/)
+[![Code style:
+black](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/ambv/black)
+[![GitHub Workflow
+Status](https://img.shields.io/github/workflow/status/noahp/polly-merge/main-ci?style=for-the-badge)](https://github.com/noahp/polly-merge/actions)
+[![LGTM](https://img.shields.io/lgtm/alerts/github/noahp/polly-merge?style=for-the-badge)](https://lgtm.com/projects/g/noahp/polly-merge/)
 
 Polls your open pull requests on Bitbucket server, and attempts to merge any
-pull requests that have a comment containing `@polly <COMMAND>` (configurable).
+pull requests that have a comment/description containing `@polly <COMMAND>`
+(configurable).
+
+_NOTE: this is for use with the Bitbucket Server 1.0 REST API, it won't work
+  with Bitbucket Cloud (which disabled the 1.0 API a while back)._
 
 You might for example run it as a cron job, to background merge your pr's
 instead of having to visit the bitbucket ui periodically.
@@ -15,11 +24,11 @@ and polling instead of a reasonable system design 😖 .
 
 ## Commands
 
-### `merge`
+### `@polly merge`
 
 Attempts to merge the PR.
 
-### `merge-after <pr url>`
+### `@polly merge-after <pr url>`
 
 Attempts to merge the PR only after the given PR has been merged, ex:
 
@@ -34,17 +43,18 @@ You might set this up to be run with cron, eg:
 ```bash
 # grab this repo
 git clone https://github.com/noahp/polly-merge.git ~/polly-merge
-
-# add the below entry to crontab
-crontab -e
 ```
+
+Then add the below entry to crontab, eg run `crontab -e`:
 
 ```crontab
 # set your token + url into the environment vars
 POLLY_MERGE_BITBUCKET_API_TOKEN=<your token>
 POLLY_MERGE_BITBUCKET_URL=<your url>
+
 # defaults to "@polly merge"
 POLLY_MERGE_TRIGGER_COMMENT=<your trigger comment>
+
 # defaults to /tmp/polly-merge.log
 POLLY_MERGE_LOG_FILE=<your log file location>
 */5 * * * * ~/polly-merge/polly-merge.py
@@ -55,9 +65,14 @@ POLLY_MERGE_LOG_FILE=<your log file location>
 Work in progress, remaining stuff:
 
 - maybe rework configuration to be a little less lame (list of params?)
-- add some basic ci checks like black/pylint/sort imports at least
+- add fake bitbucket server api 1.0
 
 This should probably not be python but I'm reallllly lazy.
 
 Keeping it dependency free at least so it has a chance of running on someone's
 system.
+
+## Developing
+
+You can run whatever tests CI runs by executing the [./test.sh](test.sh) script
+(requires Docker; everything runs in a container).
