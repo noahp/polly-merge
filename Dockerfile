@@ -1,4 +1,17 @@
-FROM buildpack-deps:buster
+FROM ubuntu:focal
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get -y install \
+    python3-pip \
+    software-properties-common
+
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt-get update && apt-get -y install \
+    python2.7 \
+    python3.6 \
+    python3.7 \
+    python3.8
 
 # get user id from build arg, so we can have read/write access to directories
 # mounted inside the container. only the UID is necessary, UNAME just for
@@ -14,12 +27,9 @@ USER ${UNAME}
 # Install Conda
 # Copied from continuumio/miniconda3
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV PATH /home/${UNAME}/miniconda3/bin:$PATH
-ARG MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-py37_4.8.2-Linux-x86_64.sh
-RUN wget --quiet ${MINICONDA_URL} -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b
+
+ENV PATH /home/${UNAME}/.local/bin:$PATH
 
 # Install these in the base conda env
-RUN pip install \
-    tox-conda==0.2.1 \
+RUN pip3 install --user \
     tox==3.15.0
