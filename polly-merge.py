@@ -38,6 +38,13 @@ import urllib.request
 from multiprocessing.dummy import Pool
 
 try:
+    import coloredlogs
+
+    coloredlogs.install(level=logging.INFO, milliseconds=True)
+except ImportError:
+    pass
+
+try:
     from halo import Halo
 except ImportError:
 
