@@ -301,15 +301,16 @@ class BitbucketApi:
         # dictionary of regex-pattern: command to run on match
         commands = {
             # command: merge
-            re.compile(f"{merge_trigger} merge$"): just_merge,
+            f"^{merge_trigger} merge$": just_merge,
             # command: merge-after <url>
-            re.compile(f"{merge_trigger} merge-after (.*)$"): merge_after,
+            f"^{merge_trigger} merge-after (.*)$": merge_after,
         }
 
         def process_commands(list_to_check):
             """Check for match and run command on list_to_check"""
             for pattern, command in commands.items():
-                match = list(filter(None, map(pattern.match, list_to_check)))
+                regex = re.compile(pattern, re.MULTILINE)
+                match = list(filter(None, map(regex.search, list_to_check)))
                 if match:
                     return command(match[0])
             return None
