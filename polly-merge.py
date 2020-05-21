@@ -336,19 +336,20 @@ def main():
 
     auth_header = {"Authorization": "Bearer " + api_token}
 
+    # shared logging setup
+    logging_setup = {
+        "format": "%(asctime)s %(message)s",
+        "level": logging.INFO,
+    }
+
     if log_file:
         # output to specified log file if variable is set
-        logging.basicConfig(
-            format="%(asctime)s $(message)s",
-            level=logging.INFO,
-            filename=log_file,
-            filemode="w",
-        )
+        logging_setup.update({"filename": log_file, "filemode": "a"})
     else:
         # default logging to stdout if no log file is specified
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", level=logging.INFO, stream=sys.stdout
-        )
+        logging_setup.update({"stream": sys.stdout})
+
+    logging.basicConfig(**logging_setup)
 
     bitbucket = BitbucketApi(base_url=bitbucket_url, auth_header=auth_header)
 

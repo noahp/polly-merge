@@ -55,7 +55,7 @@ POLLY_MERGE_BITBUCKET_URL=<your url>
 # defaults to "@polly merge"
 POLLY_MERGE_TRIGGER_COMMENT=<your trigger comment>
 
-# defaults to /tmp/polly-merge.log
+# if POLLY_MERGE_LOG_FILE is unset, defaults to stdout
 POLLY_MERGE_LOG_FILE=<your log file location>
 */5 * * * * ~/polly-merge/polly-merge.py
 ```
