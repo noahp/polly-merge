@@ -288,7 +288,7 @@ class BitbucketApi:
             # basic sanity check URL is valid
             # strip off anything post PR-ID (such as /overview /diff)
             match = re.match(
-                "(/(?:projects|users)/.*/repos/.*/pull-requests/\d*)[/.*]?",
+                "(/(?:projects|users)/.*/repos/.*/pull-requests/[0-9]*)[/.*]?",
                 other_pr_url_stem,
             )
             if not match:
