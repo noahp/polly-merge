@@ -208,7 +208,7 @@ class BitbucketApi:
     def is_pr_merged(self, pr_url_stem):
         """
         Check if a specific PR is merged
-        Returns True if the specificed PR is merged False otherwise
+        Returns True if the specified PR is merged False otherwise
         "pr_url_stem" should look like "/projects/<project name>/repos/<repo slug>/pull-requests/<pr id>"
         """
         result, response_json, _ = get_url(
@@ -288,7 +288,7 @@ class BitbucketApi:
             # basic sanity check URL is valid
             # strip off anything post PR-ID (such as /overview /diff)
             match = re.match(
-                "(/projects/.*/repos/.*/pull-requests/[0-9]*)[/.*]?", other_pr_url_stem
+                "(/(?:projects|users)/.*/repos/.*/pull-requests/\d*)[/.*]?", other_pr_url_stem
             )
             if not match:
                 return (pr_url, (False, f"invalid pr_url {other_pr_url}"))
