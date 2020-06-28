@@ -55,6 +55,9 @@ POLLY_MERGE_BITBUCKET_URL=<your url>
 # defaults to "@polly merge"
 POLLY_MERGE_TRIGGER_COMMENT=<your trigger comment>
 
+# if provided, comments not written by the given user will be ignored
+POLLY_MERGE_BITBUCKET_USERNAME=<your username (e.g. jdoe)>
+
 # if POLLY_MERGE_LOG_FILE is unset, defaults to stdout
 POLLY_MERGE_LOG_FILE=<your log file location>
 */5 * * * * ~/polly-merge/polly-merge.py

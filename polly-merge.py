@@ -9,6 +9,9 @@ POLLY_MERGE_BITBUCKET_API_TOKEN - user's api token. needs write access to merge
 
 POLLY_MERGE_BITBUCKET_URL - base url for the bitbucket server, eg https://foo.com
 
+POLLY_MERGE_BITBUCKET_USERNAME - username e.g. jdoe.
+  if provided, comments not written by the given user will be ignored
+
 POLLY_MERGE_TRIGGER_COMMENT - modify the comment used to trigger merge,
   default is "@polly"
 
@@ -160,7 +163,7 @@ class BitbucketApi:
         )
 
     @staticmethod
-    def recurse_comments(comments, comments_text):
+    def recurse_comments(comments, comments_text, username_filter=None):
         """
         recurse nested comments. the activities api returns stuff like:
 
@@ -175,13 +178,22 @@ class BitbucketApi:
                 "text": "some text"
 
         etc. so recurse through it
+
+        If username_filter is provided, only comments written by that user will be returned.
         """
         for comment in comments:
-            comments_text.append(comment["text"])
-            BitbucketApi.recurse_comments(comment["comments"], comments_text)
+            if username_filter is None or comment["author"]["name"] == username_filter:
+                comments_text.append(comment["text"])
+            BitbucketApi.recurse_comments(
+                comment["comments"], comments_text, username_filter
+            )
 
-    def get_all_comments(self, projectkey, repositoryslug, pullrequestid):
-        """get comments for a pr"""
+    def get_all_comments(
+        self, projectkey, repositoryslug, pullrequestid, username_filter=None
+    ):
+        """
+        get comments for a pr
+        If username_filter is provided, only comments written by that user will be returned."""
 
         # The "comments" rest api sucks. You have to specify a path (to a file in
         # the diff) for comments, so you can't see general comments. Use the
@@ -198,10 +210,16 @@ class BitbucketApi:
                 comment = activity["comment"]
 
                 # for now, just add the raw text from each comment
-                comments_text.append(comment["text"])
+                if (
+                    username_filter is None
+                    or comment["author"]["name"] == username_filter
+                ):
+                    comments_text.append(comment["text"])
 
                 # recurse through nested comments
-                self.recurse_comments(comment["comments"], comments_text)
+                self.recurse_comments(
+                    comment["comments"], comments_text, username_filter
+                )
 
         return comments_text
 
@@ -251,7 +269,7 @@ class BitbucketApi:
 
         return (result, "")
 
-    def process_pr(self, pr_data, merge_trigger):
+    def process_pr(self, pr_data, merge_trigger, username):
         """
         Process a single pr from the pr json data returned from the dashboard api
         Returns:
@@ -270,7 +288,9 @@ class BitbucketApi:
         pullrequestid = pr_data["id"]
 
         def get_comments():
-            return self.get_all_comments(projectkey, repositoryslug, pullrequestid)
+            return self.get_all_comments(
+                projectkey, repositoryslug, pullrequestid, username
+            )
 
         def just_merge(match):
             """Issue a non conditional merge"""
@@ -330,6 +350,8 @@ def main():
     assert api_token, "Please set POLLY_MERGE_BITBUCKET_API_TOKEN!"
     bitbucket_url = os.environ.get("POLLY_MERGE_BITBUCKET_URL")
     assert bitbucket_url, "Please set POLLY_MERGE_BITBUCKET_URL!"
+    # Doesn't seem to be a 1.0 API to get the authenticated user's username
+    bitbucket_username = os.environ.get("POLLY_MERGE_BITBUCKET_USERNAME")
 
     log_file = os.environ.get("POLLY_MERGE_LOG_FILE")
 
@@ -376,7 +398,7 @@ def main():
     # up dramatically if there's lots of open pr's, because we spend most of the
     # time waiting on the server
     def process_pr_wrapper(pr_data):
-        return bitbucket.process_pr(pr_data, merge_trigger)
+        return bitbucket.process_pr(pr_data, merge_trigger, bitbucket_username)
 
     # issue all the pr data requests simultaneously (up to 50). most won't
     # require paging (>25 "activities") so this should be pretty good
