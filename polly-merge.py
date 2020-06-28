@@ -31,6 +31,8 @@ eg for setting up fsnotify or something on the file where output is redirected.
 polly-merge is a broke person's bors-ng 😔
 """
 
+import configparser
+import dataclasses
 import json
 import logging
 import os
@@ -358,24 +360,89 @@ class BitbucketApi:
         )
 
 
+@dataclasses.dataclass
+class PollyConfig:
+    """
+    Configuration settings
+    """
+
+    bitbucket_api_token: str = ""
+    bitbucket_url: str = ""
+    any_user_comment: bool = False
+    log_file: str = ""
+    merge_trigger: str = "@polly"
+
+    def __setattr__(self, name, value):
+        """Parse from str for typed values"""
+        if name == "any_user_comment":
+            if isinstance(value, str):
+                self.any_user_comment = distutils_util.strtobool(value)
+            elif isinstance(value, bool):
+                super(PollyConfig, self).__setattr__(name, value)
+            else:
+                raise ValueError(f"whoops, {value} is unsupported type {type(value)}")
+        else:
+            super(PollyConfig, self).__setattr__(name, value)
+
+    def mandatory_field_check(self):
+        """Assert on any mandatory fields that aren't set"""
+        for field in ("bitbucket_api_token", "bitbucket_url"):
+            assert self.__getattribute__(field), f"Error! must set {field}"
+
+
+def find_ini_file():
+    """Locate polly-merge.ini"""
+
+    # sources, in order of highest precedence to lowest
+    inifile_sources = (
+        # env car
+        os.environ.get("POLLY_MERGE_CONFIG_FILE"),
+        # cwd
+        "./polly-merge.ini" if os.path.isfile("./polly-merge.ini") else None,
+        # next to this script
+        os.path.join(os.path.dirname(__file__))
+        if os.path.isfile(os.path.join(os.path.dirname(__file__)))
+        else None,
+    )
+    return next(filter(None, inifile_sources), None)
+
+
+def load_configuration():
+    """
+    Load configuration settings. Hierarchy is:
+
+    - polly-merge.ini (POLLY_MERGE_CONFIG_FILE env var, or cwd, or this file
+      adjacent)
+    - env vars will override settings in that file
+    """
+    config = PollyConfig()
+    inifile = find_ini_file()
+
+    if inifile:
+        # load settings from inifile
+        cfg = configparser.ConfigParser()
+        cfg.read(inifile)
+        if "DEFAULT" in cfg:
+            for key, value in cfg["DEFAULT"].items():
+                config.__setattr__(key.lower(), value)
+
+    # load env variables
+    for field in dataclasses.fields(config):
+        val = os.environ.get(f"POLLY_MERGE_{field.name.upper()}")
+        if val:
+            config.__setattr__(field.name, val)
+
+    # check mandatory fields
+    config.mandatory_field_check()
+
+    return config
+
+
 def main():
     """Program entrance point"""
-    api_token = os.environ.get("POLLY_MERGE_BITBUCKET_API_TOKEN")
-    assert api_token, "Please set POLLY_MERGE_BITBUCKET_API_TOKEN!"
-    bitbucket_url = os.environ.get("POLLY_MERGE_BITBUCKET_URL")
-    assert bitbucket_url, "Please set POLLY_MERGE_BITBUCKET_URL!"
+    config = load_configuration()
 
-    current_user_only_comments = bool(
-        distutils_util.strtobool(
-            os.environ.get("POLLY_MERGE_ANY_USER_COMMENT", "False")
-        )
-    )
-
-    log_file = os.environ.get("POLLY_MERGE_LOG_FILE")
-
-    merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly")
-
-    auth_header = {"Authorization": "Bearer " + api_token}
+    auth_header = {"Authorization": "Bearer " + config.bitbucket_api_token}
 
     # shared logging setup
     logging_setup = {
@@ -383,16 +450,16 @@ def main():
         "level": logging.INFO,
     }
 
-    if log_file:
+    if config.log_file:
         # output to specified log file if variable is set
-        logging_setup.update({"filename": log_file, "filemode": "a"})
+        logging_setup.update({"filename": config.log_file, "filemode": "a"})
     else:
         # default logging to stdout if no log file is specified
         logging_setup.update({"stream": sys.stdout})
 
     logging.basicConfig(**logging_setup)
 
-    bitbucket = BitbucketApi(base_url=bitbucket_url, auth_header=auth_header)
+    bitbucket = BitbucketApi(base_url=config.bitbucket_url, auth_header=auth_header)
 
     # 1. get all open pull requests
     with Halo(text="Loading open PRs", spinner="dots", stream=sys.stderr) as spinner:
@@ -416,7 +483,9 @@ def main():
     # up dramatically if there's lots of open pr's, because we spend most of the
     # time waiting on the server
     def process_pr_wrapper(pr_data):
-        return bitbucket.process_pr(pr_data, merge_trigger, current_user_only_comments)
+        return bitbucket.process_pr(
+            pr_data, config.merge_trigger, not config.any_user_comment
+        )
 
     # issue all the pr data requests simultaneously (up to 50). most won't
     # require paging (>25 "activities") so this should be pretty good

@@ -8,8 +8,6 @@ RUN apt-get update && apt-get -y install \
 
 RUN add-apt-repository ppa:deadsnakes/ppa
 RUN apt-get update && apt-get -y install \
-    python2.7 \
-    python3.6 \
     python3.7 \
     python3.8
 
