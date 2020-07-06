@@ -375,6 +375,8 @@ def main():
 
     merge_trigger = os.environ.get("POLLY_MERGE_TRIGGER_COMMENT", "@polly")
 
+    log_success_prefix = os.environ.get("POLLY_MERGE_SUCCESS_PREFIX", "🎉")
+
     auth_header = {"Authorization": "Bearer " + api_token}
 
     # shared logging setup
@@ -432,7 +434,7 @@ def main():
     # ('PR URL', (True/False <success code>, string <extra info>))
     for merged in filter(None, results):
         if merged[1][0]:
-            logging.info(f"Merged {merged[0]}")
+            logging.info(f"{log_success_prefix} Merged {merged[0]}")
         else:
             logging.info(f"Failed to merge {merged[0]} : {merged[1][1]}")
 
