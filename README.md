@@ -51,18 +51,10 @@ Then add the below entry to crontab, eg run `crontab -e`:
 # set your token + url into the environment vars
 POLLY_MERGE_BITBUCKET_API_TOKEN=<your token>
 POLLY_MERGE_BITBUCKET_URL=<your url>
-
-# defaults to "@polly merge"
-POLLY_MERGE_TRIGGER_COMMENT=<your trigger comment>
-
-# if provided, comments from any user can trigger the action,
-# instead of just the authenticated user
-POLLY_MERGE_ANY_USER_COMMENT=<1 to enable, or unset to disable>
-
-# if POLLY_MERGE_LOG_FILE is unset, defaults to stdout
-POLLY_MERGE_LOG_FILE=<your log file location>
 */5 * * * * ~/polly-merge/polly-merge.py
 ```
+
+See [`polly-merge.py`](polly-merge.py) for additional options.
 
 ## Todo
 
